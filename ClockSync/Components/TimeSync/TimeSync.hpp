@@ -8,6 +8,8 @@
 #define ClockSync_TimeSync_HPP
 
 #include "ClockSync/Components/TimeSync/TimeSyncComponentAc.hpp"
+#include <sys/timepps.h>
+#include <Os/Task.hpp>
 
 namespace ClockSync {
 
@@ -23,6 +25,11 @@ class TimeSync final : public TimeSyncComponentBase {
 
     //! Destroy TimeSync object
     ~TimeSync();
+
+    //! Initialize PPS device
+    //! \param ppsDevice: Path to PPS device (e.g., "/dev/pps0")
+    //! \return true if successful, false otherwise
+    bool initPPS(const char* ppsDevice);
 
   private:
     // ----------------------------------------------------------------------
@@ -68,6 +75,12 @@ class TimeSync final : public TimeSyncComponentBase {
     //! Perform PPS synchronization
     void performPPSSync();
 
+    //! PPS monitoring thread entry point
+    static void ppsThreadEntry(void* ptr);
+
+    //! PPS monitoring loop (runs in separate thread)
+    void ppsMonitorLoop();
+
   private:
     // ----------------------------------------------------------------------
     // Private member variables
@@ -83,6 +96,18 @@ class TimeSync final : public TimeSyncComponentBase {
 
     //! Last measured drift in microseconds
     I32 m_driftMicroseconds;
+
+    //! PPS device file descriptor
+    int m_ppsFd;
+
+    //! PPS handle for kernel PPS subsystem
+    pps_handle_t m_ppsHandle;
+
+    //! PPS monitoring thread
+    Os::Task m_ppsTask;
+
+    //! Flag to stop PPS thread
+    volatile bool m_stopPpsThread;
 };
 
 }  // namespace ClockSync

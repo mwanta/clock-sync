@@ -5,6 +5,7 @@
 // ======================================================================
 // Used to access topology functions
 #include <ClockSyncDeployment/Top/ClockSyncDeploymentTopology.hpp>
+#include "ClockSync/Components/TimeSync/TimeSync.hpp"
 // OSAL initialization
 #include <Os/Os.hpp>
 // Used for signal handling shutdown
@@ -53,6 +54,7 @@ int main(int argc, char* argv[]) {
     U16 port_number = 0;
 
     Os::init();
+    
 
     // Loop while reading the getopt supplied options
     while ((option = getopt(argc, argv, "hp:a:")) != -1) {
@@ -85,10 +87,30 @@ int main(int argc, char* argv[]) {
     signal(SIGTERM, signalHandler);
     (void)printf("Hit Ctrl-C to quit\n");
 
-    // Setup, cycle, and teardown topology
+    // Set up topology
     ClockSyncDeployment::setupTopology(inputs);
+    
+    // Initialize PPS AFTER topology setup
+    ClockSync::TimeSync& timeSyncRef = topology.timeSync;
+    
+    if (!timeSyncRef.initPPS("/dev/pps0")) {
+        printf("WARNING: Failed to initialize PPS device /dev/pps0\n");
+        printf("  - GPS may not have satellite lock yet\n");
+        printf("  - Check GPIO18 connection\n");
+        printf("  - Verify device tree overlay enabled\n");
+        printf("  Continuing with software PPS only...\n");
+    } else {
+        printf("SUCCESS: PPS initialized on /dev/pps0\n");
+    }
+    
+    // Start rate groups and run
     ClockSyncDeployment::startRateGroups(Fw::TimeInterval(1,0));  // Program loop cycling rate groups at 1Hz
+    
+    // Teardown
     ClockSyncDeployment::teardownTopology(inputs);
     (void)printf("Exiting...\n");
+    
     return 0;
+
+
 }

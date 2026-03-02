@@ -19,8 +19,7 @@ register_fprime_library(
         "${CMAKE_CURRENT_LIST_DIR}/TimeSync.fpp"
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/TimeSync.cpp"
-#   DEPENDS
-#       MyPackage_MyOtherModule
+    # PPS is automatically linked on Linux
 )
 
 ### Unit Tests ###

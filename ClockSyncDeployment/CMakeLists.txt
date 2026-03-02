@@ -22,3 +22,6 @@ register_fprime_deployment(
     DEPENDS
         ${FPRIME_CURRENT_MODULE}_Top
 )
+
+# Link PPS library to deployment
+target_link_libraries(ClockSyncDeployment PRIVATE pps)
