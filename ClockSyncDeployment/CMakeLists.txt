@@ -24,4 +24,4 @@ register_fprime_deployment(
 )
 
 # Link PPS library to deployment
-target_link_libraries(ClockSyncDeployment PRIVATE pps)
+# target_link_libraries(ClockSyncDeployment PRIVATE pps)

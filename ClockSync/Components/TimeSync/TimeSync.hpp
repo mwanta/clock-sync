@@ -8,8 +8,13 @@
 #define ClockSync_TimeSync_HPP
 
 #include "ClockSync/Components/TimeSync/TimeSyncComponentAc.hpp"
-#include <sys/timepps.h>
 #include <Os/Task.hpp>
+
+// Only include PPS headers on Linux
+#if defined(__linux__) && !defined(__APPLE__)
+  #define HAVE_LINUX_PPS 1
+  #include <sys/timepps.h>
+#endif
 
 namespace ClockSync {
 
@@ -20,15 +25,15 @@ class TimeSync final : public TimeSyncComponentBase {
     // ----------------------------------------------------------------------
 
     //! Construct TimeSync object
-    TimeSync(const char* const compName  //!< The component name
+    TimeSync(const char* const compName
     );
 
     //! Destroy TimeSync object
     ~TimeSync();
 
-    //! Initialize PPS device
-    //! \param ppsDevice: Path to PPS device (e.g., "/dev/pps0")
-    //! \return true if successful, false otherwise
+    //! Initialize PPS device w/ it's path
+    //! \param ppsDevice Path to PPS device (e.g. "/dev/pps0")
+    //! \return true if initialization successful, false if failed
     bool initPPS(const char* ppsDevice);
 
   private:
@@ -75,12 +80,13 @@ class TimeSync final : public TimeSyncComponentBase {
     //! Perform PPS synchronization
     void performPPSSync();
 
+#ifdef HAVE_LINUX_PPS
     //! PPS monitoring thread entry point
     static void ppsThreadEntry(void* ptr);
 
     //! PPS monitoring loop (runs in separate thread)
     void ppsMonitorLoop();
-
+#endif
   private:
     // ----------------------------------------------------------------------
     // Private member variables
@@ -97,6 +103,7 @@ class TimeSync final : public TimeSyncComponentBase {
     //! Last measured drift in microseconds
     I32 m_driftMicroseconds;
 
+#ifdef HAVE_LINUX_PPS
     //! PPS device file descriptor
     int m_ppsFd;
 
@@ -108,6 +115,7 @@ class TimeSync final : public TimeSyncComponentBase {
 
     //! Flag to stop PPS thread
     volatile bool m_stopPpsThread;
+#endif
 };
 
 }  // namespace ClockSync

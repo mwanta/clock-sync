@@ -7,11 +7,14 @@
 #include "ClockSync/Components/TimeSync/TimeSync.hpp"
 #include <time.h>
 #include <sys/time.h>
-#include <sys/timepps.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <errno.h>
 #include <Fw/Types/Assert.hpp>
+
+// Only include PPS-specific headers on Linux
+#ifdef HAVE_LINUX_PPS
+  #include <fcntl.h>
+  #include <unistd.h>
+  #include <errno.h>
+#endif
 
 namespace ClockSync {
 
@@ -24,16 +27,19 @@ TimeSync::TimeSync(const char* const compName)
       m_ppsEnabled(false),
       m_syncCount(0),
       m_lastSyncTime(0),
-      m_driftMicroseconds(0),
-      m_ppsFd(-1),
+      m_driftMicroseconds(0)
+#ifdef HAVE_LINUX_PPS
+      ,m_ppsFd(-1),
       m_stopPpsThread(false)
+#endif
 {}
 
 TimeSync::~TimeSync() {
+#ifdef HAVE_LINUX_PPS
     // Stop PPS thread
     this->m_stopPpsThread = true;
     
-    // Wait a bit for thread to exit
+    // Wait for thread to exit
     Os::Task::delay(100);
     
     // Clean up PPS resources
@@ -42,9 +48,11 @@ TimeSync::~TimeSync() {
         close(this->m_ppsFd);
         this->m_ppsFd = -1;
     }
+#endif
 }
 
 bool TimeSync::initPPS(const char* ppsDevice) {
+#ifdef HAVE_LINUX_PPS
     // Open PPS device
     this->m_ppsFd = open(ppsDevice, O_RDWR);
     if (this->m_ppsFd < 0) {
@@ -92,6 +100,7 @@ bool TimeSync::initPPS(const char* ppsDevice) {
     }
 
     return true;
+#endif
 }
 
 
@@ -108,17 +117,23 @@ void TimeSync::ppsSignal_handler(FwIndexType portNum, Os::RawTime& cycleStart) {
         return;
     }
     
-    // If hardware PPS is not available, use software sync
+#ifdef HAVE_LINUX_PPS
+    // If hardware PPS not available, use software sync
     if (this->m_ppsFd < 0) {
         this->performPPSSync();
     }
+#else
+    // Always use software sync on non-Linux platforms
+    this->performPPSSync();
+#endif
 }
 
 
 // ----------------------------------------------------------------------
 // Handler implementations for commands
-// -
+// ----------------------------------------------------------------------
 
+// Coarse synchronization
 void TimeSync::SET_TIME_cmdHandler(
     FwOpcodeType opCode, 
     U32 cmdSeq, 
@@ -148,6 +163,7 @@ void TimeSync::SET_TIME_cmdHandler(
     }
 }
 
+// PPS control
 void TimeSync::ENABLE_PPS_cmdHandler(
     FwOpcodeType opCode, 
     U32 cmdSeq, 
@@ -165,6 +181,7 @@ void TimeSync::ENABLE_PPS_cmdHandler(
     this->cmdResponse_out(opCode, cmdSeq, Fw::CmdResponse::OK);
 }
 
+// Testing command to manually trigger PPS sync
 void TimeSync::TRIGGER_PPS_SYNC_cmdHandler(
     FwOpcodeType opCode, 
     U32 cmdSeq
@@ -191,12 +208,11 @@ void TimeSync::performPPSSync() {
     I32 driftUs = driftNs / 1000;
     
     // If drift is more than 500ms, round up to next second
-    // Otherwise round down to current second
     if (ts.tv_nsec >= 500000000) {
         ts.tv_sec += 1;
     }
 
-    // Set nanoseconds to 0 (synchronize to whole second)
+    // Set nanoseconds to 0
     ts.tv_nsec = 0;
     
     // Set the system time
@@ -222,6 +238,7 @@ void TimeSync::performPPSSync() {
     }
 }
 
+#ifdef HAVE_LINUX_PPS
 void TimeSync::ppsThreadEntry(void* ptr) {
     TimeSync* comp = static_cast<TimeSync*>(ptr);
     comp->ppsMonitorLoop();
@@ -234,7 +251,7 @@ void TimeSync::ppsMonitorLoop() {
     while (!this->m_stopPpsThread) {
         // Only process if PPS is enabled and device is open
         if (!this->m_ppsEnabled || this->m_ppsFd < 0) {
-            Os::Task::delay(1000); // Sleep 1 second if disabled
+            Os::Task::delay(1000);
             continue;
         }
         
@@ -250,15 +267,12 @@ void TimeSync::ppsMonitorLoop() {
         );
 
         if (ret == 0) {
-            // Got PPS event with kernel timestamp!
-            // This timestamp is captured by the kernel at interrupt time
-            // giving us microsecond accuracy
+            // Got PPS event with kernel timestamp
             struct timespec ts = info.assert_timestamp;
             
             // Calculate drift in microseconds
             I32 driftUs = ts.tv_nsec / 1000;
             
-            // The PPS pulse marks the exact second boundary
             // Truncate to whole second
             ts.tv_nsec = 0;
             
@@ -287,8 +301,9 @@ void TimeSync::ppsMonitorLoop() {
             // Timeout - no PPS signal received in 3 seconds
             this->log_WARNING_LO_PPSTimeout();
         }
-        // Other errors are silently ignored (device might not be ready yet)
+        // Other errors are silently ignored 
     }
 }
+#endif
 
 }  // namespace ClockSync

@@ -48,7 +48,7 @@ module ClockSyncDeployment {
     text event connections instance CdhCore.textLogger
     health connections instance CdhCore.$health
     param connections instance FileHandling.prmDb
-    time connections instance chronoTime
+    time connections instance posixTime
 
   # ----------------------------------------------------------------------
   # Telemetry packets (only used when TlmPacketizer is used)
