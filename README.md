@@ -22,10 +22,24 @@ Background: Maintaining accurate time is critical for satellite operations. Cloc
 - System Clock Management: TimeSync updates the Linux system clock via clock_settime(), which PosixTime reads and distributes
 - All components are connected to PosixTime in topology.fpp
 
+#### Workflow:
+1. Ground/GPS sends timestamp/PPS signal to TimeSync
+2. TimeSync updates Linux system clock via `clock_settime()`
+3. PosixTime reads Linux system clock via `clock_gettime()`
+4. All components query PosixTime for current time
+
 ```
-Ground/GPS → TimeSync → clock_settime() → Linux System Clock
-                                               ↓
-All Components ← PosixTime.timeGetPort() ← reads system clock
+                    Linux System Clock
+                     (CLOCK_REALTIME)
+                            ↑ ↓
+                     write  │ │  read
+                            │ │
+        ┌──clock_settime()──┘ └──clock_gettime()──┐
+        │                                         │
+   TimeSync                                   PosixTime
+        ↑                                         ↓
+        │                                         │
+   Ground/GPS                              All Components
 ```
 ### 2. Coarse synchronization: getting a mock radio message with a timestamp, and using this to calibrate the system time.
 
@@ -51,6 +65,9 @@ ClockSync/Components/TimeSync/
 ├── TimeSync.hpp          # Component header
 ├── TimeSync.cpp          # Implementation
 └── CMakeLists.txt        # Build configuration
+ClockSyncDeployment
+├── Main.cpp          
+└── Top/topology.fpp
 ```
 
 #### Commands:
@@ -72,16 +89,15 @@ ClockSync/Components/TimeSync/
 - PPSTimeout: warning when PPS signal not recieved
 
 #### Telemetry:
-- LastSyncTime(int): timestamp of last synchronization
+- LastSyncTime(U32): timestamp of last synchronization
 - PPSEnabled(bool): current PPS enable state
-- DriftMicroseconds(int): measured time drift
-- SyncCount(int): total synchonizations performed
+- DriftMicroseconds(I32): measured time drift
+- SyncCount(U32): total synchonizations performed
 
 ### GPS Hardware Integration To-Do's:
 - Connect GPS module to Raspberry Pi
 - Test Linux PPS subsystem integration
-- Measure and characterize drift over time
-- Implement PPS timeout recovery strategies
+- Note that PPS related code in topology.fpp is currently commented out to allow for build testing
 
 ## Dependencies:
 
@@ -101,7 +117,7 @@ ClockSync/Components/TimeSync/
 - Python 3.6+ with fprime-tools
 
 ## Resources:
--  F Prime Documentation: https://nasa.github.io/fprime/
+- PosixTime Implementation: nasa/fprime/Svc/PosixTime
 - F Prime Tutorials: https://fprime.jpl.nasa.gov/
 - Linux PPS Documentation: https://www.kernel.org/doc/html/latest/driver-api/pps.html
 
